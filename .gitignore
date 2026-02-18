@@ -1,0 +1,24 @@
+# Pandora
+logs/
+*.socket
+
+# Firecracker artefacts
+images/
+bin/
+
+# Python / uv
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+dist/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

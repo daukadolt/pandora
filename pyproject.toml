@@ -1,0 +1,13 @@
+[project]
+name = "pandora"
+version = "0.1.0"
+description = "Ephemeral code execution inside Firecracker microVMs"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "requests>=2.32.5",
+    "requests-unixsocket>=0.4.1",
+]
+
+[project.scripts]
+pandora = "vm_manager:main"
