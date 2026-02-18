@@ -29,7 +29,7 @@ class SandboxRun:
 
     sandbox_id: str
     slot_id: int
-    boot_ms: float
+    acquire_ms: float
     exec_results: list[float] = field(default_factory=list)
     total_ms: float = 0.0
     error: str = ""
@@ -43,13 +43,13 @@ def run_one(client: PandoraClient, code: str, execs_per: int,
         sb = client.create(idle_timeout=120)
     except Exception as e:
         return SandboxRun(
-            sandbox_id="", slot_id=-1, boot_ms=0, error=f"create failed: {e}",
+            sandbox_id="", slot_id=-1, acquire_ms=0, error=f"create failed: {e}",
         )
 
     run = SandboxRun(
         sandbox_id=sb.sandbox_id,
         slot_id=sb.slot_id,
-        boot_ms=sb.boot_ms,
+        acquire_ms=sb.acquire_ms,
     )
     try:
         for _ in range(execs_per):
@@ -107,7 +107,7 @@ def main() -> None:
                 avg_exec = statistics.mean(run.exec_results) if run.exec_results else 0
                 print(
                     f"  [{idx:3d}] sb={run.sandbox_id} slot={run.slot_id} "
-                    f"boot={run.boot_ms:.0f}ms "
+                    f"acquire={run.acquire_ms:.0f}ms "
                     f"execs={len(run.exec_results)} "
                     f"avg_exec={avg_exec:.0f}ms "
                     f"total={run.total_ms:.0f}ms"
@@ -139,13 +139,13 @@ def main() -> None:
             f"max={s[-1]:7.0f}  ms"
         )
 
-    boots = [r.boot_ms for r in ok]
+    acquires = [r.acquire_ms for r in ok]
     totals = [r.total_ms for r in ok]
     all_execs = [ms for r in ok for ms in r.exec_results]
 
     print()
     print("Latency breakdown (ms):")
-    print(stats_line("boot", boots))
+    print(stats_line("acquire", acquires))
     if all_execs:
         print(stats_line("exec (each)", all_execs))
     print(stats_line("total/sandbox", totals))

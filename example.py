@@ -14,10 +14,11 @@ def main() -> None:
 
     print("=== create sandbox ===")
     with client.create(idle_timeout=120) as sb:
-        print(f"sandbox_id: {sb.sandbox_id}")
-        print(f"slot_id:    {sb.slot_id}")
-        print(f"guest_ip:   {sb.guest_ip}")
-        print(f"boot_ms:    {sb.boot_ms:.0f}")
+        print(f"sandbox_id:  {sb.sandbox_id}")
+        print(f"slot_id:     {sb.slot_id}")
+        print(f"guest_ip:    {sb.guest_ip}")
+        print(f"warm:        {sb.warm}")
+        print(f"acquire_ms:  {sb.acquire_ms:.1f}")
         print()
 
         print("=== run commands in the same sandbox ===")

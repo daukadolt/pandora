@@ -42,13 +42,15 @@ class Sandbox:
 
     def __init__(self, session: requests.Session, base_url: str,
                  sandbox_id: str, slot_id: int, guest_ip: str,
-                 boot_ms: float, idle_timeout: float) -> None:
+                 warm: bool, acquire_ms: float,
+                 idle_timeout: float) -> None:
         self._session = session
         self._url = base_url
         self.sandbox_id = sandbox_id
         self.slot_id = slot_id
         self.guest_ip = guest_ip
-        self.boot_ms = boot_ms
+        self.warm = warm
+        self.acquire_ms = acquire_ms
         self.idle_timeout = idle_timeout
         self._closed = False
 
@@ -107,7 +109,8 @@ class PandoraClient:
             sandbox_id=data["sandbox_id"],
             slot_id=data["slot_id"],
             guest_ip=data["guest_ip"],
-            boot_ms=data["boot_ms"],
+            warm=data["warm"],
+            acquire_ms=data["acquire_ms"],
             idle_timeout=data["idle_timeout"],
         )
 
