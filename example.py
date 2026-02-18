@@ -6,47 +6,59 @@ API = "http://localhost:8000"
 
 
 def main() -> None:
-    with PandoraClient(API) as p:
-        print("=== health check ===")
-        print(p.health())
+    client = PandoraClient(API)
+
+    print("=== health check ===")
+    print(client.health())
+    print()
+
+    print("=== create sandbox ===")
+    with client.create(idle_timeout=120) as sb:
+        print(f"sandbox_id: {sb.sandbox_id}")
+        print(f"slot_id:    {sb.slot_id}")
+        print(f"guest_ip:   {sb.guest_ip}")
+        print(f"boot_ms:    {sb.boot_ms:.0f}")
         print()
 
-        print("=== simple command ===")
-        r = p.execute("echo 'hello from the sandbox' && uname -a")
-        print(f"exit_code: {r.exit_code}")
-        print(f"stdout:    {r.stdout.strip()}")
-        print(f"boot:      {r.boot_ms:.0f} ms")
-        print(f"ssh_ready: {r.ssh_ready_ms:.0f} ms")
-        print(f"exec:      {r.exec_ms:.0f} ms")
-        print(f"teardown:  {r.teardown_ms:.0f} ms")
-        print(f"total:     {r.total_ms:.0f} ms")
+        print("=== run commands in the same sandbox ===")
+        r = sb.exec("echo 'hello from the sandbox' && uname -a")
+        print(f"stdout:  {r.stdout.strip()}")
+        print(f"exec_ms: {r.exec_ms:.0f}")
         print()
 
-        print("=== python one-liner ===")
-        r = p.execute("python3 -c \"print(sum(range(1000)))\"")
-        print(f"stdout: {r.stdout.strip()}")
-        print(f"total:  {r.total_ms:.0f} ms")
+        r = sb.exec("python3 -c \"print(sum(range(1000)))\"")
+        print(f"python says: {r.stdout.strip()}")
+        print()
+
+        print("=== state persists across execs ===")
+        sb.exec("echo 'hello world' > /tmp/greeting.txt")
+        r = sb.exec("cat /tmp/greeting.txt")
+        print(f"file contents: {r.stdout.strip()}")
         print()
 
         print("=== intentional failure ===")
-        r = p.execute("exit 42")
+        r = sb.exec("exit 42")
         print(f"exit_code: {r.exit_code}")
         print()
 
-        print("=== filesystem isolation ===")
-        r = p.execute("echo 'secret' > /tmp/test.txt && cat /tmp/test.txt")
-        print(f"stdout: {r.stdout.strip()}")
-        print()
-
-        print("=== network check ===")
-        r = p.execute("ip addr show eth0 | head -3")
+        print("=== network info ===")
+        r = sb.exec("ip addr show eth0 | head -3")
         print(f"stdout:\n{r.stdout.strip()}")
         print()
 
-        print("=== prometheus metrics (last 10 lines) ===")
-        text = p.metrics_text()
-        for line in text.strip().splitlines()[-10:]:
-            print(f"  {line}")
+    print("=== sandbox auto-closed ===")
+
+    print()
+    print("=== list active sandboxes (should be empty) ===")
+    print(client.list_sandboxes())
+    print()
+
+    print("=== prometheus metrics (last 10 lines) ===")
+    text = client.metrics_text()
+    for line in text.strip().splitlines()[-10:]:
+        print(f"  {line}")
+
+    client.close()
 
 
 if __name__ == "__main__":

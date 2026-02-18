@@ -3,14 +3,16 @@
 # Pandora – Ephemeral Interpreter
 # setup_network.sh
 #
-# Creates the Layer-2/3 plumbing that connects a Firecracker microVM to the
-# host network.  The microVM sits on a private 172.16.0.0/24 segment behind
-# the host, which acts as its default gateway and NATs outbound traffic
-# through the WAN interface (eth0).
+# Sets up the subnet-level networking that all microVMs share: IP forwarding,
+# NAT (masquerade), and forwarding rules.  Individual TAP devices are created
+# per-VM by the Python orchestrator — this script only handles the common
+# plumbing.
 #
-# Topology:
+# Topology (N concurrent VMs):
 #
-#   microVM  (172.16.0.2) ──tap0── Host (172.16.0.1) ──eth0── Internet
+#   microVM-0  (172.16.0.2)  ──tap0──┐
+#   microVM-1  (172.16.0.6)  ──tap1──┤── Host (gateway) ──eth0── Internet
+#   microVM-2  (172.16.0.10) ──tap2──┘
 #
 # Designed for Ubuntu 24.04 running inside a Lima envelope on macOS.
 # ------------------------------------------------------------------------------
@@ -18,9 +20,6 @@
 set -euo pipefail
 
 # ---------- tunables ---------------------------------------------------------
-TAP_DEV="tap0"
-TAP_IP="172.16.0.1"
-TAP_CIDR="${TAP_IP}/24"
 MICROVM_SUBNET="172.16.0.0/24"
 WAN_IF="eth0"          # Lima's outbound NIC
 # -----------------------------------------------------------------------------
@@ -29,25 +28,21 @@ log() { printf '[pandora:net] %s\n' "$*"; }
 
 # ---- guard ------------------------------------------------------------------
 if [[ $EUID -ne 0 ]]; then
-    echo "error: must run as root (need CAP_NET_ADMIN for TAP/iptables)" >&2
+    echo "error: must run as root (need CAP_NET_ADMIN for iptables)" >&2
     exit 1
 fi
 
 # ---- cleanup helper (also callable as `setup_network.sh teardown`) ----------
 teardown() {
-    log "tearing down ${TAP_DEV}"
+    log "tearing down subnet rules"
 
-    # Flush the NAT rule first so we don't leave a dangling MASQUERADE entry.
     iptables -t nat -D POSTROUTING \
         -s "${MICROVM_SUBNET}" -o "${WAN_IF}" -j MASQUERADE 2>/dev/null || true
 
-    # Remove the forwarding rules that pin-hole traffic between tap0 and the WAN.
-    iptables -D FORWARD -i "${TAP_DEV}" -o "${WAN_IF}" -j ACCEPT 2>/dev/null || true
-    iptables -D FORWARD -i "${WAN_IF}" -o "${TAP_DEV}" -m state \
-        --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
-
-    ip link set "${TAP_DEV}" down  2>/dev/null || true
-    ip tuntap del dev "${TAP_DEV}" mode tap 2>/dev/null || true
+    # Subnet-based forwarding rules (not per-TAP).
+    iptables -D FORWARD -s "${MICROVM_SUBNET}" -o "${WAN_IF}" -j ACCEPT 2>/dev/null || true
+    iptables -D FORWARD -d "${MICROVM_SUBNET}" -i "${WAN_IF}" \
+        -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
 
     log "teardown complete"
 }
@@ -57,23 +52,8 @@ if [[ "${1:-}" == "teardown" ]]; then
     exit 0
 fi
 
-# ---- create TAP device ------------------------------------------------------
-# A TAP interface operates at Layer 2 – it delivers raw Ethernet frames to
-# user-space (Firecracker).  This is the virtual "cable" between the host
-# kernel's network stack and the guest's virtio-net device.
-log "creating TAP device ${TAP_DEV}"
-
-# Idempotent: tear down any stale interface from a previous run.
+# ---- idempotent: remove stale rules from a previous run --------------------
 teardown 2>/dev/null || true
-
-ip tuntap add dev "${TAP_DEV}" mode tap
-
-# Assign the gateway IP that the microVM expects as its default route.
-# The /24 mask means only addresses in 172.16.0.0–172.16.0.255 are on-link.
-ip addr add "${TAP_CIDR}" dev "${TAP_DEV}"
-ip link set "${TAP_DEV}" up
-
-log "${TAP_DEV} is up with ${TAP_CIDR}"
 
 # ---- enable IP forwarding ---------------------------------------------------
 # Without ip_forward=1 the kernel drops packets that arrive on one interface
@@ -94,15 +74,11 @@ iptables -t nat -A POSTROUTING \
     -s "${MICROVM_SUBNET}" -o "${WAN_IF}" -j MASQUERADE
 
 # ---- forwarding rules -------------------------------------------------------
-# The default FORWARD policy on most distros is DROP.  We need explicit rules
-# to allow traffic to flow between the TAP and the WAN interface.
-#
-# Rule 1: Allow NEW + ESTABLISHED outbound traffic from the microVM.
-# Rule 2: Allow only RELATED/ESTABLISHED return traffic back in – this
-#          prevents unsolicited inbound connections from the WAN reaching the
-#          microVM, which is the "strict network isolation" we advertise.
-iptables -A FORWARD -i "${TAP_DEV}" -o "${WAN_IF}" -j ACCEPT
-iptables -A FORWARD -i "${WAN_IF}" -o "${TAP_DEV}" \
+# Subnet-based rules: cover all current and future TAP devices without
+# naming any specific interface.  Any packet from 172.16.0.0/24 heading
+# to the WAN is allowed out; only replies are allowed back in.
+iptables -A FORWARD -s "${MICROVM_SUBNET}" -o "${WAN_IF}" -j ACCEPT
+iptables -A FORWARD -d "${MICROVM_SUBNET}" -i "${WAN_IF}" \
     -m state --state RELATED,ESTABLISHED -j ACCEPT
 
-log "network plumbing ready – microVM can reach the internet via ${WAN_IF}"
+log "subnet networking ready – microVMs can reach the internet via ${WAN_IF}"
