@@ -2,30 +2,96 @@
 
 Ephemeral code execution inside Firecracker microVMs with strict network isolation and built-in observability.
 
-Pandora spins up a short-lived Firecracker microVM, runs untrusted code inside it, and tears the whole thing down — network plumbing included — when it's done. Each execution gets its own kernel, rootfs, and isolated network namespace. Nothing persists; nothing leaks.
+Pandora boots a short-lived Firecracker microVM per request, executes arbitrary shell commands inside it over SSH, tears the whole thing down, and records Prometheus metrics for every lifecycle phase. Each execution gets its own kernel, rootfs, and isolated network namespace. Nothing persists; nothing leaks.
 
 ## Architecture
 
 ```
-                  ┌─────────────────────────┐
-                  │  vm_manager.py           │
-                  │  (Python orchestrator)   │
-                  └────────┬────────────────┘
-                           │  REST over UNIX socket
-                           ▼
-                  ┌─────────────────────────┐
-                  │  Firecracker VMM         │
-                  │  /tmp/firecracker.socket │
-                  └────────┬────────────────┘
-                           │  virtio-net
-                           ▼
-            ┌──────────────────────────────────┐
-            │  tap0 (172.16.0.1/24)            │
-            │  iptables MASQUERADE → eth0      │
-            └──────────────────────────────────┘
+                    ┌──────────────────────────────┐
+  POST /execute     │  api.py (FastAPI)             │    GET /metrics
+  ──────────────►   │  Prometheus histograms/       │◄──── Prometheus
+                    │  counters per lifecycle phase  │      scrapes
+                    └──────────┬───────────────────┘
+                               │
+                    ┌──────────▼───────────────────┐
+                    │  vm_manager.py                 │
+                    │  FirecrackerVM class            │
+                    │  boot → wait_for_ssh →         │
+                    │  execute(SSH) → shutdown        │
+                    └──────────┬───────────────────┘
+                               │  REST over UNIX socket
+                    ┌──────────▼───────────────────┐
+                    │  Firecracker VMM               │
+                    │  /tmp/firecracker.socket        │
+                    └──────────┬───────────────────┘
+                               │  virtio-net
+                    ┌──────────▼───────────────────┐
+                    │  tap0 (172.16.0.1/24)          │
+                    │  iptables MASQUERADE → eth0     │
+                    └────────────────────────────────┘
 ```
 
-The guest boots with a static IP (`172.16.0.2`) and reaches the internet through host-side NAT. Inbound connections from the WAN are blocked — only `RELATED,ESTABLISHED` return traffic is permitted.
+## Quick start
+
+```bash
+uv sync
+sudo ./prepare_rootfs.sh
+sudo .venv/bin/uvicorn api:app --host 0.0.0.0 --port 8000
+```
+
+Then from any client:
+
+```bash
+curl -X POST http://localhost:8000/execute \
+  -H "Content-Type: application/json" \
+  -d '{"code": "echo hello && uname -a"}'
+```
+
+```json
+{
+  "exit_code": 0,
+  "stdout": "hello\nLinux ... aarch64 GNU/Linux\n",
+  "stderr": "",
+  "boot_ms": 102.3,
+  "ssh_ready_ms": 1842.1,
+  "exec_ms": 45.7,
+  "teardown_ms": 12.4,
+  "total_ms": 2002.5
+}
+```
+
+## API
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/execute` | POST | Boot a microVM, run code, return output + timing |
+| `/metrics` | GET | Prometheus metrics (histograms, counters, gauges) |
+| `/health` | GET | Liveness check |
+
+## SDK
+
+```python
+from client import PandoraClient
+
+with PandoraClient("http://localhost:8000") as pandora:
+    result = pandora.execute("python3 -c 'print(sum(range(100)))'")
+    print(result.stdout)       # "4950\n"
+    print(result.total_ms)     # 2100.5
+```
+
+## Observability
+
+Every `/execute` request records Prometheus metrics:
+
+| Metric | Type | What it measures |
+|---|---|---|
+| `pandora_vm_boot_seconds` | Histogram | FC launch through InstanceStart |
+| `pandora_vm_ssh_ready_seconds` | Histogram | InstanceStart to sshd accepting connections |
+| `pandora_vm_exec_seconds` | Histogram | SSH command execution time |
+| `pandora_vm_teardown_seconds` | Histogram | FC termination + socket cleanup |
+| `pandora_vm_e2e_seconds` | Histogram | Total request latency |
+| `pandora_executions_total` | Counter | Executions by status (success/error/timeout) |
+| `pandora_active_vms` | Gauge | Currently running VMs |
 
 ## Requirements
 
@@ -35,65 +101,27 @@ The guest boots with a static IP (`172.16.0.2`) and reaches the internet through
 - Python 3.13+ (managed via [uv](https://docs.astral.sh/uv/))
 - `iptables`, `ip`, `sysctl` (standard on Ubuntu)
 
-## Quick start
-
-```bash
-# Install deps and create .venv
-uv sync
-
-# Bring up the network (needs root for TAP + iptables)
-sudo ./setup_network.sh
-
-# Launch a microVM
-sudo .venv/bin/python vm_manager.py
-```
-
-Tear down the network manually if needed:
-
-```bash
-sudo ./setup_network.sh teardown
-```
-
-## Observability
-
-Every boot writes a metrics document to `logs/vm_metrics.json`:
-
-```json
-{
-  "events": {
-    "t_start": 123456.0001,
-    "t_socket_ready": 123456.0423,
-    "t_booted": 123456.1890
-  },
-  "boot_latency_ms": 188.90,
-  "socket_ready_latency_ms": 42.20
-}
-```
-
-This file is designed for ingestion by a Prometheus node-exporter textfile collector, a Datadog custom check, or a simple `jq` pipeline.
-
-## Cleanup guarantees
-
-`vm_manager.py` wraps the entire lifecycle in `try/finally` and registers `SIGINT`/`SIGTERM` handlers. On any exit path:
-
-1. The Firecracker process is terminated (escalating to `SIGKILL` after 5 s).
-2. The API socket is removed.
-3. The TAP interface and iptables rules are torn down via `setup_network.sh teardown`.
+See [SETUP.md](SETUP.md) for full step-by-step instructions.
 
 ## Project layout
 
 ```
 .
+├── api.py                # FastAPI server (POST /execute, GET /metrics)
+├── vm_manager.py         # FirecrackerVM lifecycle + SSH execution
+├── client.py             # Python SDK
 ├── setup_network.sh      # TAP + NAT plumbing (bash)
-├── vm_manager.py         # Orchestrator + metrics (Python)
+├── prepare_rootfs.sh     # SSH key injection into rootfs
 ├── pyproject.toml
 ├── bin/
 │   └── firecracker       # Firecracker binary (not checked in)
 ├── images/
 │   ├── hello-vmlinux.bin # Guest kernel
 │   └── hello-rootfs.ext4 # Root filesystem
+├── keys/
+│   ├── pandora           # SSH private key (not checked in)
+│   └── pandora.pub       # SSH public key (injected into rootfs)
 └── logs/
-    └── vm_metrics.json   # Written on each run
 ```
 
 ## License
