@@ -33,6 +33,15 @@ wheels = [
 ]
 
 [[package]]
+name = "attrs"
+version = "25.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/6b/5c/685e6633917e101e5dcb62b9dd76946cbb57c26e133bae9e0cd36033c0a9/attrs-25.4.0.tar.gz", hash = "sha256:16d5969b87f0859ef33a48b35d55ac1be6e42ae49d5e853b597db70c35c57e11", size = 934251, upload-time = "2025-10-06T13:54:44.725Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3a/2a/7cc015f5b9f5db42b7d48157e23356022889fc354a2813c15934b7cb5c0e/attrs-25.4.0-py3-none-any.whl", hash = "sha256:adcf7e2a1fb3b36ac48d97835bb6d8ade15b8dcce26aba8bf1d14847b57a3373", size = 67615, upload-time = "2025-10-06T13:54:43.17Z" },
+]
+
+[[package]]
 name = "bcrypt"
 version = "5.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -340,6 +349,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "paramiko" },
     { name = "prometheus-client" },
+    { name = "pyignite" },
     { name = "requests" },
     { name = "requests-unixsocket" },
     { name = "uvicorn", extra = ["standard"] },
@@ -350,6 +360,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.129.0" },
     { name = "paramiko", specifier = ">=4.0.0" },
     { name = "prometheus-client", specifier = ">=0.24.1" },
+    { name = "pyignite", specifier = ">=0.6.1" },
     { name = "requests", specifier = ">=2.32.5" },
     { name = "requests-unixsocket", specifier = ">=0.4.1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.41.0" },
@@ -455,6 +466,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/22/ed/182129d83032702912c2e2d8bbe33c036f342cc735737064668585dac28f/pydantic_core-2.41.5-cp314-cp314t-win_amd64.whl", hash = "sha256:80aa89cad80b32a912a65332f64a4450ed00966111b6615ca6816153d3585a8c", size = 1981607, upload-time = "2025-11-04T13:41:58.889Z" },
     { url = "https://files.pythonhosted.org/packages/9f/ed/068e41660b832bb0b1aa5b58011dea2a3fe0ba7861ff38c4d4904c1c1a99/pydantic_core-2.41.5-cp314-cp314t-win_arm64.whl", hash = "sha256:35b44f37a3199f771c3eaa53051bc8a70cd7b54f333531c59e29fd4db5d15008", size = 1974769, upload-time = "2025-11-04T13:42:01.186Z" },
 ]
+
+[[package]]
+name = "pyignite"
+version = "0.6.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d7/14/291078723056d19d504e157db14b6074fc1e9336e475e0110cf5848eff15/pyignite-0.6.1.zip", hash = "sha256:e143d7a907e2662da11f63d2e9e34234dc722cd63c9aeb74486280e3aef3369d", size = 353684, upload-time = "2023-02-17T15:18:56.966Z" }
 
 [[package]]
 name = "pynacl"

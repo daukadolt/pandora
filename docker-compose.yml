@@ -1,4 +1,17 @@
 services:
+  # ---------------------------------------------------------------------------
+  # Apache Ignite — distributed state for warm pool and sandbox registry
+  # ---------------------------------------------------------------------------
+  ignite:
+    image: apacheignite/ignite:2.16.0
+    ports:
+      - "10800:10800"   # thin client (pyignite connects here)
+      - "8080:8080"     # REST API / Ignite Control Center
+    environment:
+      - IGNITE_QUIET=false
+      - JVM_OPTS=-Xms512m -Xmx1g
+    restart: unless-stopped
+
   prometheus:
     image: prom/prometheus:latest
     ports:

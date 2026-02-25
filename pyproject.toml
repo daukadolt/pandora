@@ -8,6 +8,7 @@ dependencies = [
     "fastapi>=0.129.0",
     "paramiko>=4.0.0",
     "prometheus-client>=0.24.1",
+    "pyignite>=0.6.1",
     "requests>=2.32.5",
     "requests-unixsocket>=0.4.1",
     "uvicorn[standard]>=0.41.0",
