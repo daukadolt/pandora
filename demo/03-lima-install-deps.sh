@@ -13,6 +13,11 @@ if ! command -v uv &>/dev/null; then
     export PATH="$HOME/.local/bin:$PATH"
 fi
 
+if [[ -d "${PROJECT_DIR}/.venv" ]]; then
+    echo "Removing existing .venv (may be from a different OS)..."
+    rm -rf "${PROJECT_DIR}/.venv"
+fi
+
 echo "Syncing Python dependencies..."
 uv sync
 

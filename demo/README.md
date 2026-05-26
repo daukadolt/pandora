@@ -30,10 +30,9 @@ You can also pass a custom name: `./demo/00-mac-create-lima.sh my-vm`
 
 ```bash
 limactl shell pandora
-cd ~/Desktop/pandora
 ```
 
-Everything from here runs inside the Lima VM.
+Lima drops you straight into `/Users/daulet/Desktop/pandora` (macOS home is mounted at the same path). Everything from here runs inside the Lima VM.
 
 ### Step 2 — Install Firecracker (Lima)
 

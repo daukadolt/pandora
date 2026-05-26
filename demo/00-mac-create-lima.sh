@@ -4,7 +4,7 @@ set -euo pipefail
 
 VM_NAME="${1:-pandora}"
 
-if limactl list --json | grep -q "\"name\":\"${VM_NAME}\""; then
+if limactl list -q 2>/dev/null | grep -qx "${VM_NAME}"; then
     echo "Lima VM '${VM_NAME}' already exists."
     echo ""
     echo "Options:"
@@ -47,7 +47,7 @@ limactl create --name="${VM_NAME}" \
     --vm-type=vz \
     --mount-writable \
     --set '.nestedVirtualization = true' \
-    template://ubuntu-24.04
+    template:ubuntu-24.04
 limactl start "${VM_NAME}"
 
 echo ""
